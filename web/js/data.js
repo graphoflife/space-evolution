@@ -23,7 +23,7 @@
   SE.CONFIG = {
     combiningTime: 0.3,
     generatingTime: 0.05,
-    previewCount: 3, // the original showed 5 upcoming objects
+    previewCount: 5, // upcoming objects shown at the top, as in the original
     rotateMap: { amplitude: 10, frequency: 0.15 },
     camera: { minRadius: 3.4, hudFraction: 0.14 },
     queue: { smallScale: 0.9, bigScale: 1.7, spacing: 1.1, gap: 0.25, spawnTime: 0.1 },

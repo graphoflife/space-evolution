@@ -43,7 +43,7 @@ Highscore, Bestzeiten und der laufende Spielstand werden pro Level im `localStor
 
 - Kein Zug-Limit, keine Werbung, kein In-App-Kauf: Gespielt wird wie mit der Vollversion (unbegrenzte Züge,
   Zeitmessung mit Bestzeiten pro Level).
-- Vorschau auf die nächsten 3 statt 5 Objekte, zusätzliche Level, Bloom-Effekt und kräftigere Farben.
+- Zusätzliche Level, Bloom-Effekt und kräftigere Farben.
 - Partikeleffekte (Sternenstaub, Sonne, Schwarzes Loch, Galaxie, Verbindungen, Punkte, Hintergrund) nutzen die
   Originalwerte aus den Unity-Prefabs; die Wolken der Sonne liegen vor der Sonne und sind etwas größer.
 - Basis ist v1.4 (neues App-Icon); die eigene Karten-Kamera von v1.4 ersetzt hier eine adaptive Kamera,

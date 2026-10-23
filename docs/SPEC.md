@@ -4,7 +4,7 @@ Quelle: Unity 2017.4.0f1 (Mono). C#-Code mit ILSpy dekompiliert, Werte aus den S
 Der Roh-Export (dekompilierter Code, Original-PNGs/WAVs) liegt lokal in `extracted/` und ist nicht Teil des Repos.
 Musik: `music_menu.mp3` = "25_BlueWater Warning", `music_game.mp3` = "4 - Through The Mist".
 
-Hinweis: Diese Datei beschreibt das Original. Die Browser-Version weicht bewusst ab (3er-Vorschau statt 5, zusätzliche Level, Bloom); siehe `README.md`.
+Hinweis: Diese Datei beschreibt das Original. Die Browser-Version weicht bewusst ab (zusätzliche Level, Bloom, Original-Partikel); siehe `README.md`.
 
 ## Spielprinzip
 Hex-Merge-Puzzle. Ein Tipp auf ein freies Feld legt das nächste Objekt aus der Warteschlange ab.
