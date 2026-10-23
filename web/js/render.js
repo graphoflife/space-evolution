@@ -1,11 +1,13 @@
-// Three.js scene: camera, tiles, space object models, particle effects and the bloom post pass.
+// Three.js scene: camera, tiles, space object models and the bloom post pass.
 // World units match the Unity scene (1 unit = distance between neighbouring hex tiles).
+// Object hierarchies, rotation axes and speeds follow the Unity prefabs (see docs/SPEC.md).
 (function () {
   'use strict';
 
   const SE = window.SE;
   const C = SE.CONFIG;
   const THREE = window.THREE;
+  const Particles = SE.Particles;
   const DEG = Math.PI / 180;
   const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -13,75 +15,8 @@
 
   // Space objects float in front of the tiles, like the Unity "Container" at z = -10.
   const OBJECT_Z = 3;
-
-  // Particle modes, selected per material with the MODE define.
-  const ORBIT = 0; // aOrbit = radius, start angle, angular speed, phase (local XZ plane)
-  const JET = 1; // aOrbit = start, length, speed, phase (along local +Y)
-  const DRIFT = 2; // aOrbit = twinkle speed, phase, velocity x, velocity y (wraps inside the view)
-  const STATIC = 3; // positions written by the CPU every frame
-  const TWINKLE = 4; // fixed position, aOrbit.z = twinkle speed, aOrbit.w = phase
-
-  const PARTICLE_VERTEX = `
-    uniform float uTime;
-    uniform float uPx;
-    uniform vec2 uBoundsMin;
-    uniform vec2 uBoundsSize;
-    attribute vec4 aOrbit;
-    attribute vec2 aSize;
-    attribute vec4 aColor;
-    varying vec4 vColor;
-    void main() {
-      vec3 p = position;
-      float alpha = aColor.a;
-      float size = aSize.x;
-    #if MODE == 0
-      float a = aOrbit.y + aOrbit.z * uTime;
-      p = vec3(cos(a) * aOrbit.x, position.y, sin(a) * aOrbit.x);
-      float pulse = sin(uTime * 2.3 + aOrbit.w);
-      size *= 1.0 + aSize.y * pulse;
-      alpha *= 0.75 + 0.25 * pulse;
-    #elif MODE == 1
-      float t = fract(uTime * aOrbit.z + aOrbit.w);
-      p = vec3(position.x * (0.4 + t), aOrbit.x + t * aOrbit.y, position.z * (0.4 + t));
-      alpha *= smoothstep(0.0, 0.15, t) * (1.0 - t);
-      size *= 1.0 - 0.5 * t;
-    #elif MODE == 2
-      vec2 q = position.xy + aOrbit.zw * uTime - uBoundsMin;
-      p = vec3(mod(q, uBoundsSize) + uBoundsMin, position.z);
-      alpha *= 0.55 + 0.45 * sin(uTime * aOrbit.x + aOrbit.y);
-    #elif MODE == 4
-      // Per-instance phase from the object's position, so neighbouring clouds don't pulse in sync.
-      float phase = aOrbit.w + modelMatrix[3].x * 2.1 + modelMatrix[3].y * 3.7;
-      float pulse = sin(uTime * aOrbit.z + phase);
-      size *= 1.0 + aSize.y * pulse;
-      alpha *= 0.65 + 0.35 * pulse;
-    #endif
-      vColor = vec4(aColor.rgb, alpha);
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-      float s = length(modelMatrix[0].xyz);
-      gl_PointSize = max(size * uPx * s, 0.0);
-    }`;
-
-  const PARTICLE_FRAGMENT = `
-    uniform sampler2D uTex;
-    varying vec4 vColor;
-    void main() {
-      gl_FragColor = vec4(vColor.rgb, vColor.a * texture2D(uTex, gl_PointCoord).a);
-    }`;
-
-  const BEAM_FRAGMENT = `
-    uniform float uTime;
-    uniform float uOpacity;
-    varying vec2 vUv;
-    void main() {
-      float y = vUv.y - 0.5;
-      float core = exp(-y * y * 140.0);
-      float glow = exp(-y * y * 16.0) * 0.35;
-      float flow = 0.55 + 0.45 * sin(vUv.x * 28.0 - uTime * 9.0);
-      float ends = smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.85, vUv.x);
-      float a = (core * flow + glow) * ends * uOpacity;
-      gl_FragColor = vec4(mix(vec3(1.0, 0.8, 0.18), vec3(1.0, 1.0, 0.85), core * flow), a);
-    }`;
+  // Outlined/Custom shader: back faces pushed out along the normals. Factor tuned for a comic look.
+  const OUTLINE_SCALE = 1.0;
 
   const QUAD_VERTEX = `
     varying vec2 vUv;
@@ -225,10 +160,6 @@
   // ------------------------------------------------------------------ renderer
 
   const Render = {
-    uTime: { value: 0 },
-    uPx: { value: 100 },
-    uBoundsMin: { value: new THREE.Vector2(-10, -10) },
-    uBoundsSize: { value: new THREE.Vector2(20, 20) },
     visuals: new Set(),
     tex: {},
     geo: {},
@@ -236,6 +167,7 @@
     view: { left: -1, right: 1, top: 1, bottom: -1 },
     size: { width: 1, height: 1, stageWidth: 1 },
     board: null,
+    dt: 0,
 
     init(canvas) {
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
@@ -244,6 +176,7 @@
       Render.post = createPost(renderer);
 
       Render.scene = new THREE.Scene();
+      Render.scene.autoUpdate = false; // world matrices are updated once per frame in render()
       Render.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
       Render.camera.position.z = 100;
 
@@ -256,8 +189,14 @@
       Render.loadTextures();
       Render.buildGeometries();
       Render.buildMaterials();
-      Render.buildBackground();
-      Render.buildScoreParticles();
+      Particles.init(Render.scene, Render.tex);
+
+      // Background (level0): twinkling dust behind everything, sized to the view in fitCamera().
+      Render.backgroundNode = new THREE.Object3D();
+      Render.backgroundNode.position.z = -50;
+      Render.scene.add(Render.backgroundNode);
+      Render.background = Particles.attach('background', Render.backgroundNode);
+
       Render.setBoard(SE.LEVELS[0]);
     },
 
@@ -286,42 +225,6 @@
 
       // Torus_001 from the gas planet prefab: major 1.615, tube 0.415, flattened to 16 %.
       Render.geo.torus = new THREE.TorusGeometry(1.615, 0.415, 12, 64).scale(1, 1, 0.161);
-
-      const R = SE.rand;
-      // Stardust keeps its particles in place and only twinkles.
-      Render.geo.stardustDark = Render.particleGeometry(20, () => {
-        const a = R(0, 6.28);
-        const r = R(0.1, 0.36);
-        return { pos: [Math.cos(a) * r, Math.sin(a) * r, 0], orbit: [0, 0, R(1.2, 2.4), R(0, 6.28)], size: [R(0.24, 0.4), 0.12], color: [0.16, 0.22, 0.5, 0.6] };
-      });
-      // Magenta / violet / blue glow, as on the app icon.
-      const palette = [[0.95, 0.28, 1, 0.6], [0.62, 0.4, 1, 0.6], [0.35, 0.52, 1, 0.6], [1, 1, 1, 0.85]];
-      Render.geo.stardustBright = Render.particleGeometry(32, (i) => {
-        const c = palette[i % palette.length];
-        const white = i % palette.length === 3;
-        const a = R(0, 6.28);
-        const r = Math.sqrt(Math.random()) * 0.32;
-        return { pos: [Math.cos(a) * r, Math.sin(a) * r, 0.01], orbit: [0, 0, R(1.5, 3.5), R(0, 6.28)], size: [white ? R(0.05, 0.1) : R(0.1, 0.26), 0.35], color: c };
-      });
-      Render.geo.blackHoleDisk = Render.particleGeometry(120, (i) => {
-        const r = R(0.27, 0.62);
-        return { pos: [0, R(-0.015, 0.015), 0], orbit: [r, R(0, 6.28), 1.7 * Math.pow(0.3 / r, 1.5), R(0, 6.28)], size: [R(0.05, 0.15), 0.3], color: i % 3 === 0 ? [1, 1, 1, 0.7] : [0.5, 0.82, 1, 0.65] };
-      });
-      Render.geo.blackHoleJet = Render.particleGeometry(36, () => ({
-        pos: [R(-0.03, 0.03), 0, R(-0.03, 0.03)],
-        orbit: [0.16, R(0.4, 0.6), R(0.7, 1.2), R(0, 1)],
-        size: [R(0.08, 0.15), 0],
-        color: [0.6, 0.85, 1, 0.8],
-      }));
-      Render.geo.galaxyStars = Render.particleGeometry(240, (i) => {
-        const r = 0.04 + Math.pow(Math.random(), 0.8) * 0.52;
-        const k = r / 0.56;
-        return { pos: [0, R(-0.01, 0.01), 0], orbit: [r, (i % 2) * Math.PI + r * 5.5 + R(-0.35, 0.35), 0.45, R(0, 6.28)], size: [R(0.05, 0.13) * (1.2 - k * 0.5), 0.3], color: [1 - 0.3 * k, 0.92 - 0.1 * k, 0.7 + 0.3 * k, 0.75] };
-      });
-      Render.geo.galaxyDust = Render.particleGeometry(50, (i) => {
-        const r = R(0.12, 0.5);
-        return { orbit: [r, (i % 2) * Math.PI + r * 5.5 + 0.45, 0.45, R(0, 6.28)], size: [R(0.1, 0.18), 0.1], color: [0.05, 0.04, 0.12, 0.45] };
-      });
     },
 
     buildMaterials() {
@@ -336,18 +239,11 @@
         sun: new THREE.MeshBasicMaterial({ map: tex.sun, color: new THREE.Color(1.15, 0.9, 0.3) }),
         black: new THREE.MeshBasicMaterial({ color: 0x000000 }),
         outline: {},
-        corona: new THREE.SpriteMaterial({ map: tex.sunParticle, color: new THREE.Color(1.7, 1.2, 0.45), blending: THREE.AdditiveBlending, depthWrite: false }),
-        corona2: new THREE.SpriteMaterial({ map: tex.sunParticle, color: new THREE.Color(1.5, 0.75, 0.2), blending: THREE.AdditiveBlending, depthWrite: false }),
         tileBorder: transparent(tex.tileBorder, C.colors.tileBorder),
         circleBorder: transparent(tex.circleBorder, C.colors.placeholderBorder),
         lastInnerBorder: transparent(tex.circleBorder, C.colors.lastPlaceholderInner),
         placeholder: transparent(tex.circleFilling, C.colors.placeholder),
         lastPlaceholder: transparent(tex.circleFilling, C.colors.center),
-        particleAdd: Render.particleMaterial(ORBIT, true),
-        particleAlpha: Render.particleMaterial(ORBIT, false),
-        twinkleAdd: Render.particleMaterial(TWINKLE, true),
-        twinkleAlpha: Render.particleMaterial(TWINKLE, false),
-        jet: Render.particleMaterial(JET, true),
       });
       Render.sharedMaterials = new Set(Object.values(Render.mat));
     },
@@ -360,92 +256,6 @@
         Render.sharedMaterials.add(m);
       }
       return m;
-    },
-
-    particleMaterial(mode, additive) {
-      return new THREE.ShaderMaterial({
-        uniforms: {
-          uTime: Render.uTime,
-          uPx: Render.uPx,
-          uBoundsMin: Render.uBoundsMin,
-          uBoundsSize: Render.uBoundsSize,
-          uTex: { value: Render.tex.particle },
-        },
-        defines: { MODE: mode },
-        vertexShader: PARTICLE_VERTEX,
-        fragmentShader: PARTICLE_FRAGMENT,
-        transparent: true,
-        depthWrite: false,
-        blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
-      });
-    },
-
-    // Builds a particle geometry; fn(i) returns { pos, orbit, size, color }.
-    particleGeometry(count, fn) {
-      const pos = new Float32Array(count * 3);
-      const orbit = new Float32Array(count * 4);
-      const size = new Float32Array(count * 2);
-      const color = new Float32Array(count * 4);
-      for (let i = 0; i < count; i++) {
-        const p = fn(i);
-        if (p.pos) pos.set(p.pos, i * 3);
-        if (p.orbit) orbit.set(p.orbit, i * 4);
-        size.set(p.size, i * 2);
-        color.set(p.color, i * 4);
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      g.setAttribute('aOrbit', new THREE.BufferAttribute(orbit, 4));
-      g.setAttribute('aSize', new THREE.BufferAttribute(size, 2));
-      g.setAttribute('aColor', new THREE.BufferAttribute(color, 4));
-      return g;
-    },
-
-    points(geometry, material, renderOrder) {
-      const p = new THREE.Points(geometry, material);
-      p.frustumCulled = false;
-      p.renderOrder = renderOrder;
-      return p;
-    },
-
-    buildBackground() {
-      const R = SE.rand;
-      const g = Render.particleGeometry(160, () => ({
-        pos: [R(-20, 20), R(-20, 20), -50],
-        orbit: [R(0.4, 1.6), R(0, 6.28), R(-0.06, 0.06), R(0.02, 0.12)],
-        size: [R(0.03, 0.1), 0],
-        color: Math.random() < 0.4 ? [0.62, 0.75, 1, R(0.15, 0.4)] : [1, 1, 1, R(0.1, 0.35)],
-      }));
-      const m = Render.particleMaterial(DRIFT, true);
-      m.depthTest = false;
-      Render.scene.add(Render.points(g, m, -10));
-    },
-
-    buildScoreParticles() {
-      const capacity = 4000;
-      const g = Render.particleGeometry(capacity, () => ({ size: [0, 0], color: [0, 0, 0, 0] }));
-      for (const name of ['position', 'aSize', 'aColor']) g.attributes[name].setUsage(THREE.DynamicDrawUsage);
-      g.setDrawRange(0, 0);
-      const m = Render.particleMaterial(STATIC, true);
-      m.depthTest = false;
-      const points = Render.points(g, m, 20);
-      points.position.z = 10;
-      Render.scene.add(points);
-      Render.scoreParticles = {
-        capacity,
-        geometry: g,
-        pos: g.attributes.position.array,
-        size: g.attributes.aSize.array,
-        color: g.attributes.aColor.array,
-      };
-    },
-
-    // Score particles write straight into the GPU buffers; call after filling `count` entries.
-    commitScoreParticles(count) {
-      const sp = Render.scoreParticles;
-      const a = sp.geometry.attributes;
-      a.position.needsUpdate = a.aSize.needsUpdate = a.aColor.needsUpdate = true;
-      sp.geometry.setDrawRange(0, count);
     },
 
     // ------------------------------------------------------------ camera
@@ -481,9 +291,9 @@
       cam.position.y = camY;
       cam.updateProjectionMatrix();
       Render.view = { left: -w, right: w, top: camY + h, bottom: camY - h };
-      Render.uPx.value = Render.renderer.getDrawingBufferSize(new THREE.Vector2()).y / (2 * h);
-      Render.uBoundsMin.value.set(-w - 0.5, camY - h - 0.5);
-      Render.uBoundsSize.value.set(2 * w + 1, 2 * h + 1);
+      // BackgroundScript: the emission box covers the whole view.
+      Render.backgroundNode.position.y = camY;
+      Render.background.def = Object.assign({}, Particles.systems.background, { shape: { type: 'box', size: [2 * w, 2 * h, 0] } });
     },
 
     screenToWorld(clientX, clientY) {
@@ -495,17 +305,21 @@
       );
     },
 
+    // Rotate scripts: Space.World spins premultiply (around the parent's axis), Space.Self spins locally.
     update(dt) {
-      Render.uTime.value += dt;
+      Render.dt = dt;
       for (const root of Render.visuals) {
         for (const s of root.userData.spinners) {
-          if (s.sprite) s.sprite.material.rotation += s.speed * dt;
-          else s.obj.rotateOnAxis(s.axis, s.speed * dt);
+          s.q.setFromAxisAngle(s.axis, s.speed * dt);
+          if (s.world) s.obj.quaternion.premultiply(s.q);
+          else s.obj.quaternion.multiply(s.q);
         }
       }
     },
 
     render() {
+      Render.scene.updateMatrixWorld();
+      Particles.update(Render.dt);
       Render.post.render(Render.scene, Render.camera);
     },
 
@@ -547,119 +361,104 @@
       return group;
     },
 
-    // ConnectionEffect: glowing link between the center and a neighbour of the same type.
-    createBeam(from, to) {
-      const material = new THREE.ShaderMaterial({
-        uniforms: { uTime: Render.uTime, uOpacity: { value: 0 } },
-        vertexShader: QUAD_VERTEX,
-        fragmentShader: BEAM_FRAGMENT,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const mesh = new THREE.Mesh(Render.geo.plane, material);
-      const dx = to.x - from.x;
-      const dy = to.y - from.y;
-      mesh.position.set((from.x + to.x) / 2, (from.y + to.y) / 2, 1);
-      mesh.rotation.z = Math.atan2(dy, dx);
-      mesh.scale.set(Math.hypot(dx, dy), 0.34, 1);
-      mesh.renderOrder = 3;
-      return { mesh, material };
+    // ConnectionEffect: sparks along the line between the center and a neighbour of the same type.
+    createConnection(from, to) {
+      const node = new THREE.Object3D();
+      node.position.set((from.x + to.x) / 2, (from.y + to.y) / 2, 1);
+      node.rotation.z = Math.atan2(to.y - from.y, to.x - from.x);
+      const emitter = Particles.attach('connection', node);
+      emitter.setActive(false);
+      return { node, emitter };
     },
 
     // ------------------------------------------------------------ space objects
 
-    // Returns a Group whose position/scale the game animates; children spin on their own.
+    // Returns a Group whose position/scale the game animates; children spin like the Unity prefabs.
     createSpaceObject(type) {
       const root = new THREE.Group();
       const container = new THREE.Group();
       container.position.z = OBJECT_Z;
       root.add(container);
       const spinners = (root.userData.spinners = []);
-      const spin = (obj, axis, degPerSec) => {
-        const sign = Math.random() > 0.5 ? -1 : 1;
-        spinners.push({ obj, axis: axis.clone().normalize(), speed: sign * degPerSec * DEG });
-      };
-      const tilted = (x, z) => {
+      const emitters = (root.userData.emitters = []);
+      const sign = Math.random() > 0.5 ? -1 : 1;
+      const spin = (obj, axis, degPerSec, world) =>
+        spinners.push({ obj, axis: axis.clone().normalize(), speed: sign * degPerSec * DEG, world, q: new THREE.Quaternion() });
+      const group = (parent, opts = {}) => {
         const g = new THREE.Group();
-        g.rotation.set(x * DEG, 0, z * DEG);
-        container.add(g);
+        if (opts.rot) g.rotation.set(opts.rot[0] * DEG, opts.rot[1] * DEG, opts.rot[2] * DEG);
+        if (opts.pos) g.position.set(opts.pos[0], opts.pos[1], opts.pos[2]);
+        if (opts.scale) g.scale.setScalar(opts.scale);
+        parent.add(g);
         return g;
       };
+      const emit = (name, node) => emitters.push(Particles.attach(name, node));
 
       switch (type) {
         case SE.Type.stardust: {
-          // Static cloud; a random orientation per instance avoids identical copies.
-          const cloud = new THREE.Group();
-          cloud.rotation.z = Math.random() * Math.PI * 2;
-          cloud.scale.x = Math.random() > 0.5 ? 1 : -1;
-          cloud.add(Render.points(Render.geo.stardustDark, Render.mat.twinkleAlpha, 5));
-          cloud.add(Render.points(Render.geo.stardustBright, Render.mat.twinkleAdd, 6));
-          container.add(cloud);
+          const node = group(container);
+          emit('darkDust', node);
+          emit('brightDust', node);
           break;
         }
         case SE.Type.astroid: {
+          spin(container, new THREE.Vector3(0, 1, -0.5), 80, true);
           const m = Render.outlined(Render.geo.asteroid, Render.mat.asteroid, [0.827, 0.702, 0.565], 0.2, 0.25);
-          m.rotation.set(Math.random() * 6.28, Math.random() * 6.28, 0);
+          m.rotation.set(-Math.PI / 2, Math.random() * 6.28, 0);
           container.add(m);
-          spin(m, new THREE.Vector3(0.2, 1, 0), 30);
           break;
         }
         case SE.Type.moon: {
+          spin(container, new THREE.Vector3(0.2, 1, 0), 30, true);
           const m = Render.outlined(Render.geo.sphere, Render.mat.moon, [0.809, 0.809, 0.809], 0.2, 0.3);
-          m.rotation.set(0.4, Math.random() * 6.28, 0.3);
+          m.quaternion.set(0.742, -0.242, 0.346, 0.52).normalize();
           container.add(m);
-          spin(m, Y_AXIS, 10);
           break;
         }
         case SE.Type.planet: {
-          const m = Render.outlined(Render.geo.sphere, Render.mat.planet, [0.38, 0.506, 0.875], 0.15, 0.35);
-          m.rotation.y = Math.random() * 6.28;
-          tilted(0, 15).add(m);
-          spin(m, Y_AXIS, 25);
+          spin(container, Y_AXIS, 30, true);
+          const tilt = group(container, { rot: [0, 0, 15] });
+          spin(tilt, Y_AXIS, 60, false);
+          tilt.add(Render.outlined(Render.geo.sphere, Render.mat.planet, [0.38, 0.506, 0.875], 0.15, 0.35));
           break;
         }
         case SE.Type.gasplanet: {
-          const body = new THREE.Group();
-          body.scale.setScalar(0.375);
-          body.rotation.y = Math.random() * 6.28;
+          spin(container, Y_AXIS, 35, true);
+          const tilt = group(container, { rot: [0, 0, 15], scale: 0.375 });
+          spin(tilt, Y_AXIS, 65, false);
           const outline = [0.905, 0.926, 0.538];
           const ring = Render.outlined(Render.geo.torus, Render.mat.gasPlanet, outline, 0.15, 1);
           ring.rotation.x = -Math.PI / 2;
-          body.add(Render.outlined(Render.geo.sphere, Render.mat.gasPlanet, outline, 0.15, 1), ring);
-          tilted(12, 15).add(body);
-          spin(body, Y_AXIS, 35);
+          tilt.add(Render.outlined(Render.geo.sphere, Render.mat.gasPlanet, outline, 0.15, 1), ring);
           break;
         }
         case SE.Type.sun: {
-          const glow = new THREE.Sprite(Render.mat.corona.clone());
-          glow.scale.set(1.75, 1.75, 1);
-          glow.position.z = -0.5;
-          const glow2 = new THREE.Sprite(Render.mat.corona2.clone());
-          glow2.scale.set(1.2, 1.2, 1);
-          glow2.position.z = -0.45;
-          const m = new THREE.Mesh(Render.geo.sphere, Render.mat.sun);
-          m.scale.setScalar(0.45);
-          m.rotation.y = Math.random() * 6.28;
-          container.add(glow, glow2, m);
-          spin(m, Y_AXIS, 10);
-          spinners.push({ sprite: glow, speed: 0.35 }, { sprite: glow2, speed: -0.5 });
+          emit('sunRim', group(root, { pos: [0, 0, OBJECT_Z], scale: 0.45 }));
+          spin(container, Y_AXIS, 10, true);
+          const model = group(container, { scale: 0.45 });
+          model.add(new THREE.Mesh(Render.geo.sphere, Render.mat.sun));
+          emit('sunSurface', model);
           break;
         }
         case SE.Type.blackhole: {
-          const g = tilted(15, -25);
-          g.add(Render.outlined(Render.geo.sphere, Render.mat.black, [1, 1, 1], 0.2, 0.2));
-          g.add(Render.points(Render.geo.blackHoleDisk, Render.mat.particleAdd, 6));
-          const bottom = Render.points(Render.geo.blackHoleJet, Render.mat.jet, 6);
-          bottom.rotation.x = Math.PI;
-          g.add(Render.points(Render.geo.blackHoleJet, Render.mat.jet, 6), bottom);
+          const turn = group(container);
+          spin(turn, Y_AXIS, 25, true);
+          const model = group(turn, { rot: [15, 0, 0], scale: 0.2 });
+          model.add(Render.outlined(Render.geo.sphere, Render.mat.black, [1, 1, 1], 0.2, 1));
+          const ring = group(model, { scale: 6 });
+          spin(ring, Y_AXIS, 50, false);
+          emit('blackHoleDisk', ring);
+          emit('blackHoleJet', group(model, { pos: [0, 1.5, 0] }));
+          emit('blackHoleJet', group(model, { pos: [0, -1.5, 0], rot: [180, 0, 0] }));
           break;
         }
         case SE.Type.galaxy: {
-          const g = tilted(35, -15);
-          g.add(Render.outlined(Render.geo.sphere, Render.mat.black, [1, 0.941, 0.61], 0.5, 0.075));
-          g.add(Render.points(Render.geo.galaxyDust, Render.mat.particleAlpha, 5));
-          g.add(Render.points(Render.geo.galaxyStars, Render.mat.particleAdd, 6));
+          spin(container, Y_AXIS, 10, true);
+          const model = group(container, { rot: [25, 0, 0], scale: 0.075 });
+          model.add(Render.outlined(Render.geo.sphere, Render.mat.black, [1, 0.941, 0.61], 0.5, 1));
+          const ring = group(model, { scale: 15 });
+          spin(ring, Y_AXIS, 10, false);
+          emit('galaxyDisk', ring);
           break;
         }
       }
@@ -669,22 +468,21 @@
 
     destroyVisual(root) {
       Render.visuals.delete(root);
+      for (const e of root.userData.emitters) Particles.detach(e);
       if (root.parent) root.parent.remove(root);
-      for (const s of root.userData.spinners) if (s.sprite) s.sprite.material.dispose();
     },
 
-    // Disposes per-instance materials of a removed group (tiles, beams, sun sprites).
+    // Disposes per-instance materials of a removed group (tiles, center).
     disposeGroup(group) {
       group.traverse((o) => {
-        if ((o.isMesh || o.isSprite) && !Render.sharedMaterials.has(o.material)) o.material.dispose();
+        if (o.isMesh && !Render.sharedMaterials.has(o.material)) o.material.dispose();
       });
     },
 
     outlined(geometry, material, outlineColor, outline, scale) {
       const g = new THREE.Group();
-      // Outlined/Custom shader: back faces pushed out along the normals, drawn in the outline colour.
       const shell = new THREE.Mesh(geometry, Render.outlineMaterial(outlineColor));
-      shell.scale.setScalar(1 + outline * 0.6);
+      shell.scale.setScalar(1 + outline * OUTLINE_SCALE);
       g.add(shell, new THREE.Mesh(geometry, material));
       g.scale.setScalar(scale);
       return g;

@@ -166,7 +166,7 @@
       this.isCenter = true;
       this.normalColor.fromArray(C.colors.center);
       this.flashDuration = C.centerFlashTime;
-      this.beams = [];
+      this.connections = [];
     }
 
     tryToCombine(givesScore) {
@@ -187,26 +187,22 @@
       this.neighbours = s.level.spokes.map(([x, y]) => s.tileAtLocal(x, y)).filter(Boolean);
       for (const n of this.neighbours) {
         n.normalColor.fromArray(C.colors.centerNeighbour);
-        const beam = Render.createBeam(this, n);
-        beam.tile = n;
-        beam.visible = false;
-        s.mapGroup.add(beam.mesh);
-        this.beams.push(beam);
+        const connection = Render.createConnection(this, n);
+        connection.tile = n;
+        s.mapGroup.add(connection.node);
+        this.connections.push(connection);
       }
       this.refreshCenterNeighbourState();
     }
 
+    // ConnectionEffect.refreshState: sparks run while a neighbour matches the center.
     refreshCenterNeighbourState() {
       for (const n of this.neighbours) n.refreshConnectionToCenter();
-      for (const b of this.beams) b.visible = b.tile.compareType(this);
+      for (const c of this.connections) c.emitter.setActive(c.tile.compareType(this));
     }
 
-    updateBeams(dt) {
-      const k = Math.min(1, dt * 8);
-      for (const b of this.beams) {
-        const u = b.material.uniforms.uOpacity;
-        u.value += ((b.visible ? 1 : 0) - u.value) * k;
-      }
+    destroy() {
+      for (const c of this.connections) SE.Particles.detach(c.emitter);
     }
   }
 
@@ -286,7 +282,9 @@
 
   // ------------------------------------------------------------------ ScoreManager
 
-  const TRAIL = 5;
+  // ScoreObject prefab: a white-to-cyan blob (size 0.4) with a 0.2 s world-space trail.
+  const SCORE_TRAIL_TIME = 0.2;
+  const SCORE_CYAN = [0, 0.834, 1];
 
   class Score {
     constructor(session) {
@@ -296,7 +294,13 @@
       this.queue = [];
       this.amountToSpawn = 0;
       this.objects = [];
-      this.drawn = false;
+      this.pts = new Float32Array(3 * 64);
+      this.drawer = (buckets) => this.draw(buckets.score);
+      SE.Particles.drawers.add(this.drawer);
+    }
+
+    destroy() {
+      SE.Particles.drawers.delete(this.drawer);
     }
 
     setScore(value) {
@@ -355,12 +359,14 @@
         }
         this.queue = this.queue.filter((item) => item.remaining > 0);
       }
-      if (this.objects.length || this.drawn) this.updateScoreObjects(dt);
+      if (this.objects.length) this.updateScoreObjects(dt);
     }
 
     spawnScoreObject(start, target, holds) {
       const range = C.score.velocityRange;
       const a = Math.random() * Math.PI * 2;
+      // Start colour: random point of the white (0.39) -> cyan (1.0) gradient.
+      const k = Math.max(0, (Math.random() - 0.39) / 0.61);
       this.objects.push({
         x: start.x,
         y: start.y,
@@ -370,17 +376,17 @@
         tx: target.x,
         ty: target.y,
         startDistance: Math.max(0.001, Math.hypot(target.x - start.x, target.y - start.y)),
+        scale: 1,
         holds,
         age: 0,
-        trail: new Float32Array(TRAIL * 2).fill(NaN),
+        color: SCORE_CYAN.map((c) => 1 + (c - 1) * k),
+        trail: [],
       });
     }
 
     // ScoreObject.move: steer towards the score icon and shrink on approach.
     updateScoreObjects(dt) {
-      const sp = Render.scoreParticles;
       const ratio = Math.pow(C.score.veloRatio, dt * 60);
-      let n = 0;
       let kept = 0;
       for (const o of this.objects) {
         o.age += dt;
@@ -391,33 +397,34 @@
         }
         o.dx = o.dx * ratio + ((o.tx - o.x) / dist) * (1 - ratio);
         o.dy = o.dy * ratio + ((o.ty - o.y) / dist) * (1 - ratio);
-        o.trail.copyWithin(2, 0, TRAIL * 2 - 2);
-        o.trail[0] = o.x;
-        o.trail[1] = o.y;
+        o.trail.push(o.x, o.y, o.age);
+        while (o.trail.length && o.age - o.trail[2] > SCORE_TRAIL_TIME) o.trail.splice(0, 3);
         o.x += o.velocity * o.dx * dt;
         o.y += o.velocity * o.dy * dt;
-        const scale = Math.min(1, dist / o.startDistance);
-        // Head particle plus a fading trail of the last positions.
-        for (let i = -1; i < TRAIL && n < sp.capacity; i++) {
-          const head = i < 0;
-          const x = head ? o.x : o.trail[i * 2];
-          if (Number.isNaN(x)) break;
-          const f = head ? 1 : 1 - (i + 1) / (TRAIL + 1);
-          sp.pos[n * 3] = x;
-          sp.pos[n * 3 + 1] = head ? o.y : o.trail[i * 2 + 1];
-          sp.size[n * 2] = head ? 0.1 + 0.16 * scale : (0.05 + 0.1 * scale) * f;
-          const c = n * 4;
-          sp.color[c] = 1;
-          sp.color[c + 1] = head ? 0.93 : 0.8;
-          sp.color[c + 2] = head ? 0.62 : 0.45;
-          sp.color[c + 3] = head ? 0.95 : 0.45 * f;
-          n++;
-        }
+        o.scale = Math.min(1, dist / o.startDistance);
         this.objects[kept++] = o;
       }
       this.objects.length = kept;
-      this.drawn = n > 0;
-      Render.commitScoreParticles(n);
+    }
+
+    draw(bucket) {
+      const pts = this.pts;
+      for (const o of this.objects) {
+        const [r, g, b] = o.color;
+        const size = 0.06 + 0.3 * o.scale;
+        let n = 0;
+        for (let i = Math.max(0, o.trail.length - 60); i < o.trail.length; i += 3) {
+          pts[n * 3] = o.trail[i];
+          pts[n * 3 + 1] = o.trail[i + 1];
+          pts[n * 3 + 2] = 10;
+          n++;
+        }
+        pts[n * 3] = o.x;
+        pts[n * 3 + 1] = o.y;
+        pts[n * 3 + 2] = 10;
+        bucket.ribbon(pts, n + 1, size * 0.8, r, g, b, 0.6);
+        bucket.billboard(o.x, o.y, 10, size, 0, r, g, b, 0.95);
+      }
     }
   }
 
@@ -505,9 +512,10 @@
       this.dead = true;
       this.timers = [];
       for (const o of [...this.objects]) o.destroy();
+      if (this.center) this.center.destroy();
+      this.score.destroy();
       Render.scene.remove(this.mapGroup, this.selection.group);
       Render.disposeGroup(this.mapGroup);
-      Render.commitScoreParticles(0);
     }
 
     async start() {
@@ -696,7 +704,6 @@
 
       for (const o of this.objects) o.update(dt);
       for (const t of this.tiles) t.updateColor(dt);
-      if (this.center) this.center.updateBeams(dt);
       this.score.update(dt);
       this.speedrun.update(dt);
 

@@ -32,9 +32,8 @@ Ohne Schlüssel läuft das Spiel normal, nur ohne Musik.
 | Level | Felder | Grüne Felder | Charakter |
 |---|---|---|---|
 | Classic | 27 | 3 | Original-Layout |
-| Duo | 28 | 2 | leicht: nur zwei Nachbarn fürs Level-Up |
+| Duo | 30 | 2 | leicht: nur zwei Nachbarn fürs Level-Up |
 | Star | 36 | 3 | großes Feld mit sechs Zacken |
-| Tiny | 18 | 3 | wenig Platz, schwer |
 | Hexa | 30 | 6 | alle sechs Nachbarn müssen passen |
 
 Highscore, Bestzeiten und der laufende Spielstand werden pro Level im `localStorage` gespeichert.
@@ -44,7 +43,10 @@ Highscore, Bestzeiten und der laufende Spielstand werden pro Level im `localStor
 - Kein Zug-Limit, keine Werbung, kein In-App-Kauf: Gespielt wird wie mit der Vollversion (unbegrenzte Züge,
   Zeitmessung mit Bestzeiten pro Level).
 - Vorschau auf die nächsten 3 statt 5 Objekte, zusätzliche Level, Bloom-Effekt und kräftigere Farben.
-- Sternenstaub funkelt an Ort und Stelle statt zu rotieren.
+- Partikeleffekte (Sternenstaub, Sonne, Schwarzes Loch, Galaxie, Verbindungen, Punkte, Hintergrund) nutzen die
+  Originalwerte aus den Unity-Prefabs; die Wolken der Sonne liegen vor der Sonne und sind etwas größer.
+- Basis ist v1.4 (neues App-Icon); die eigene Karten-Kamera von v1.4 ersetzt hier eine adaptive Kamera,
+  die Karte und Vorschau ohne Abschneiden in jedes Seitenverhältnis einpasst.
 
 ## Aufbau
 
@@ -53,7 +55,8 @@ Highscore, Bestzeiten und der laufende Spielstand werden pro Level im `localStor
 | `web/` | das Spiel (wird 1:1 veröffentlicht) |
 | `web/js/data.js` | Objektdaten, Level-Layouts, Bewegungskurve |
 | `web/js/game.js` | Spiellogik (Port von GameManager, Maptile, CenterMapTile, SelectionManager, ScoreManager, SpeedRunManager) |
-| `web/js/render.js` | Three.js-Szene, 3D-Objekte, Partikel, Bloom- und Sättigungs-Pass |
+| `web/js/render.js` | Three.js-Szene, 3D-Objekte, Bloom- und Sättigungs-Pass |
+| `web/js/particles.js` | Partikelsysteme mit den Originalwerten, Trails und gebündeltes Rendering |
 | `web/js/ui.js` | HUD, Menü mit Level-Auswahl, Meldungen |
 | `web/js/audio.js`, `save.js`, `main.js` | Sound, Speicherstand, Szenenwechsel und Frame-Loop |
 | `web/js/assets.js` | eingebettete Texturen, Effekte und Asteroiden-Mesh (generiert) |
@@ -81,6 +84,6 @@ Spiel steckt, nicht im Quellcode. Pages ist auf *Settings → Pages → Source: 
 - [three.js](https://threejs.org) r149 – MIT
 - Roboto – Apache License 2.0
 - Grafiken, Spielidee und Texte: aus dem Originalspiel *Space Evolution*
-- Musik: „Through The Mist“ und „BlueWater Warning“, lizenziert über den Unity Asset Store
-  (Standard Unity Asset Store EULA). Die Musik ist **nicht** Teil der Lizenz dieses Repositorys, liegt hier nur
-  verschlüsselt und darf nicht separat weiterverwendet werden.
+- Musik: „Through The Mist“ und „BlueWater Warning“ aus dem *SciFi Music Pack* von Adam Bielecki,
+  lizenziert über den Unity Asset Store (Standard Unity Asset Store EULA). Die Musik ist **nicht** Teil der
+  Lizenz dieses Repositorys, liegt hier nur verschlüsselt und darf nicht separat weiterverwendet werden.

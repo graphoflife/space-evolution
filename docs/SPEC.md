@@ -60,3 +60,24 @@ Alle Objekte rotieren (Rotate-Skripte, ca. 10–65 °/s).
 - Meldungen: Tutorial (`TutorialScreen Small RS.png`, "Combine!" / "Level Up!", "Create a BLACK HOLE in the center to WIN!"), "Game Over" + "Try Again!", "YOU WIN!" + "You created a BLACK HOLE! Now continue and improve your highscore."
 - Spielstand-Speicherung: Score, Zeit, Level, Belegung, Warteschlange, Highscore, Bestzeiten je Level, Sound-Einstellungen → im Browser per localStorage.
 - Monetarisierung (100 Züge, Werbung +40, Vollversion-Kauf) im Browser weglassen → wie Vollversion: unbegrenzte Züge mit Speedrun-Zeit.
+
+## Version 1.4 (gegenüber 1.31)
+- Spielwerte unverändert (Objekte, Karte, Wahrscheinlichkeiten, Zentrum, Animationen).
+- Neues App-Icon (Schwarzes Loch); Logo nur enger zugeschnitten.
+- Züge 120 statt 100, 50 statt 40 pro Werbevideo (nur Free-Version, im Browser nicht relevant).
+- Eigene „Map Camera“ (orthografisch, Größe 4.7, Viewport y = -0.21) rendert Felder (Layer 8) und Objekte (Layer 9);
+  `RotateMap` sitzt jetzt auf dieser Kamera. Effekt: Die Karte wird nach der Bildschirmhöhe skaliert und im unteren
+  Bereich zentriert; auf sehr schmalen Bildschirmen würde sie seitlich abgeschnitten.
+
+## Partikelsysteme (v1.4, aus den ParticleSystem-Komponenten)
+Werte stehen in `web/js/particles.js` (`SYSTEMS`). Kurzfassung:
+- Sternenstaub: „Bright Dust“ (additiv, 8/s, 2 s, Kugel r 0.75, Geschwindigkeit -0.45 → nach innen),
+  „Dark Dust“ (alpha, 8/s, 1 s, Kugel r 0.2, nach außen). Farben zufällig aus Magenta/Schwarz/Blau/Navy-Verlauf.
+- Sonne: „SphereEffect“ (50 Wolken, Größe 4 × 0.45, auf der Oberfläche), „Border“ (Wolkenring r 1.1 × 0.45).
+- Schwarzes Loch: Scheibe (30/s, 3 s, nur Welt-Trails, Farbe weiß → orange → blaugrün), zwei Jets (2/s, 5 s, Trails).
+- Galaxie: 15/s, 20 s, driftet nach außen, 70 % mit Welt-Trails (alpha), Farbverlauf rosa → blau → gelb → rot.
+- Verbindung Zentrum ↔ Nachbar: 100/s Funken (dunkelrot bis gelb) entlang der Linie.
+- Punkte: weißer bis cyanfarbener Fleck mit 0.2 s Trail.
+- Hintergrund: 20/s Staubpunkte, 10 s Lebensdauer, flackernd.
+- Rotationen (Rotate): Asteroid 80°/s um (0,1,-0.5), Mond 30°/s um (0.2,1,0), Planet 30 + 60°/s, Gasplanet 35 + 65°/s,
+  Sonne 10°/s, Schwarzes Loch 25°/s (Ring 50°/s), Galaxie 10°/s (Ring 10°/s).

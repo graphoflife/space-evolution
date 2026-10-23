@@ -145,9 +145,8 @@
 
   SE.LEVELS = [
     level('classic', 'Classic', 'Original', without(rings23, [[0, 3], [-3, 0], [3, -3]]), triSpokes),
-    level('duo', 'Duo', 'Easy', without(rings23, [[0, 3], [0, -3]]), [[0, 2], [0, -2]]),
+    level('duo', 'Duo', 'Easy', rings23, [[0, 2], [0, -2]]),
     level('star', 'Star', 'Big', [...rings23, ...axisTiles(4)], triSpokes),
-    level('tiny', 'Tiny', 'Hard', [...ring(2), ...axisTiles(3)], triSpokes),
     level('hexa', 'Hexa', 'Expert', rings23, axisTiles(2)),
   ];
 
