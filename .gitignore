@@ -1,0 +1,12 @@
+# Original Android build and the raw export from it (decompiled code, unoptimised assets)
+*.apk
+extracted/
+
+# Licensed music: only the encrypted copies in assets/music/ are committed
+web/audio/*.mp3
+.music-key
+
+# Local tooling
+.claude/
+__pycache__/
+.DS_Store

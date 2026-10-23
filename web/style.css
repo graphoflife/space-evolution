@@ -1,0 +1,563 @@
+:root {
+  --u: 4px; /* 1 % of the stage width, set by main.js */
+  --h: 8px; /* 1 % of the window height */
+  --bg: #2e3a40;
+  --blue: #5c9be8;
+  --yellow: #e2d94a;
+  --menu-yellow: #ffef3a;
+  --hl: #ffe600;
+  --green: #45b34a;
+  --text-dim: #cfd4d8;
+  --hud-text: min(calc(var(--h) * 3.4), calc(var(--u) * 6.2));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: #fff;
+  font-family: 'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+#gl {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, transparent 45%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+#stage {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+button img {
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.hidden,
+.gone {
+  display: none !important;
+}
+
+.hl {
+  color: var(--hl);
+}
+
+.score-blue {
+  color: var(--blue);
+}
+
+.score-yellow {
+  color: var(--yellow);
+}
+
+/* Dark bands span the whole window even when the stage is narrower. */
+.hud-bar,
+.title-container,
+.menu-panel,
+.msg-wrap {
+  z-index: 0;
+}
+
+.hud-bar::before,
+.title-container::before,
+.menu-panel::before,
+.msg-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -100vw;
+  right: -100vw;
+  z-index: -1;
+}
+
+/* ------------------------------------------------------------------ HUD */
+
+.hud-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(var(--h) * 14);
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2);
+  padding: 0 calc(var(--u) * 3);
+}
+
+.hud-bar::before {
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.hud-block {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: calc(var(--u) * 2.5);
+  row-gap: calc(var(--h) * 0.8);
+}
+
+.hud-block img {
+  width: min(calc(var(--h) * 4.2), calc(var(--u) * 8.5));
+  height: min(calc(var(--h) * 4.2), calc(var(--u) * 8.5));
+  object-fit: contain;
+}
+
+.hud-block span {
+  display: inline-block;
+  justify-self: start;
+  font-size: var(--hud-text);
+  line-height: 1;
+  white-space: nowrap;
+  transition: transform 0.08s ease-out;
+}
+
+#score.bump {
+  transform: scale(1.12);
+}
+
+.pause-btn {
+  flex: none;
+  width: min(calc(var(--u) * 11), calc(var(--h) * 7));
+  height: min(calc(var(--u) * 11), calc(var(--h) * 7));
+}
+
+.pause-btn img {
+  width: 100%;
+  height: 100%;
+}
+
+#popups {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.time-diff {
+  position: absolute;
+  font-size: var(--hud-text);
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  animation: time-diff ease-out forwards;
+}
+
+@keyframes time-diff {
+  to {
+    transform: translateY(calc(var(--h) * 5));
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ menu */
+
+#menu {
+  position: absolute;
+  inset: 0;
+}
+
+.title-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 21%;
+}
+
+.title-container::before {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.title {
+  position: absolute;
+  left: 14%;
+  width: 72%;
+  top: 8%;
+  height: 58%;
+  object-fit: contain;
+}
+
+.goal {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  top: 70%;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: min(calc(var(--u) * 5), calc(var(--h) * 2.6));
+}
+
+.goal .hl {
+  font-size: 1.25em;
+}
+
+.menu-panel {
+  position: absolute;
+  top: 21%;
+  height: 40%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--h) * 1.1);
+  pointer-events: auto;
+}
+
+.menu-panel::before {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.level-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 3);
+  width: 100%;
+  height: 40%;
+}
+
+.level-preview {
+  height: 100%;
+  aspect-ratio: 1.1;
+  max-width: 55%;
+  filter: drop-shadow(0 0 calc(var(--u) * 1.5) rgba(120, 200, 255, 0.25));
+}
+
+.level-preview .tile {
+  fill: #a7adb5;
+  stroke: #4a5157;
+  stroke-width: 0.06;
+}
+
+.level-preview .spoke {
+  fill: #58cc4f;
+  stroke: #2f6e2b;
+  stroke-width: 0.06;
+}
+
+.level-preview .center {
+  fill: #47b840;
+  stroke: #2f6e2b;
+  stroke-width: 0.06;
+}
+
+.arrow-btn {
+  width: min(calc(var(--u) * 12), calc(var(--h) * 7));
+  height: min(calc(var(--u) * 12), calc(var(--h) * 7));
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: min(calc(var(--u) * 10), calc(var(--h) * 5.6));
+  line-height: 1;
+  padding-bottom: 0.08em;
+  transition: transform 0.1s, background 0.2s;
+}
+
+.arrow-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.arrow-btn:active {
+  transform: scale(0.9);
+}
+
+.level-name {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2.5);
+  font-size: min(calc(var(--u) * 6.5), calc(var(--h) * 3.4));
+}
+
+.level-tag {
+  padding: 0.25em 0.7em;
+  border-radius: 1em;
+  font-size: 0.55em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #5d6b78;
+}
+
+.level-tag[data-tag='original'] {
+  background: #3f7fd6;
+}
+
+.level-tag[data-tag='easy'] {
+  background: #36a845;
+}
+
+.level-tag[data-tag='big'] {
+  background: #8a4fd8;
+}
+
+.level-tag[data-tag='hard'] {
+  background: #e0782a;
+}
+
+.level-tag[data-tag='expert'] {
+  background: #d93a4f;
+}
+
+.menu-high {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 2.5);
+}
+
+.menu-high img {
+  height: min(calc(var(--u) * 9), calc(var(--h) * 4.6));
+  width: auto;
+}
+
+.menu-high span {
+  color: var(--menu-yellow);
+  font-size: min(calc(var(--u) * 8), calc(var(--h) * 4.2));
+  line-height: 1;
+}
+
+.menu-times {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: center;
+  column-gap: calc(var(--u) * 5);
+  row-gap: calc(var(--h) * 0.6);
+}
+
+.time-entry {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 1.5);
+  color: #dfe6ee;
+  font-size: min(calc(var(--u) * 4), calc(var(--h) * 2.2));
+}
+
+.time-entry img {
+  width: min(calc(var(--u) * 6.5), calc(var(--h) * 3.6));
+  height: min(calc(var(--u) * 6.5), calc(var(--h) * 3.6));
+  object-fit: contain;
+}
+
+/* FadeWobbleUIScript: scale in, then breathe. */
+.fade {
+  position: absolute;
+  transform: scale(0);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.3, 1.15);
+}
+
+#menu.shown .fade {
+  transform: scale(1);
+}
+
+.wobble {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  animation: wobble 2.4s ease-in-out infinite;
+}
+
+.restart-btn .wobble {
+  animation-delay: -0.6s;
+}
+
+.music-btn .wobble {
+  animation-delay: -1.2s;
+}
+
+.sfx-btn .wobble {
+  animation-delay: -1.8s;
+}
+
+@keyframes wobble {
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+.play-btn {
+  left: 30%;
+  width: 40%;
+  top: 63%;
+  height: 15%;
+}
+
+.restart-btn {
+  left: 41%;
+  width: 18%;
+  top: 80.5%;
+  height: 7%;
+}
+
+.corner-btn {
+  top: 92%;
+  height: 7%;
+  width: 13%;
+}
+
+.corner-btn .wobble {
+  max-width: calc(var(--h) * 7);
+  margin: 0 auto;
+}
+
+.music-btn {
+  left: 2%;
+}
+
+.sfx-btn {
+  left: 16%;
+}
+
+.tutorial-btn {
+  left: 85%;
+}
+
+.tutorial-btn span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  width: auto;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 14%;
+  font-size: min(calc(var(--u) * 7), calc(var(--h) * 4));
+}
+
+/* ------------------------------------------------------------------ messages */
+
+#messages {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.msg-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+/* Dims the whole window, not just the portrait stage. */
+.msg-wrap::before {
+  background: rgba(0, 0, 0, 0);
+  transition: background 0.3s;
+}
+
+.msg-wrap.shown::before {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.msg {
+  position: relative;
+  width: 88%;
+  max-height: 94%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 3.5);
+  padding: calc(var(--u) * 5);
+  text-align: center;
+  background: rgba(20, 25, 30, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: calc(var(--u) * 4);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  transform: scale(0);
+  transition: transform 0.3s ease-out;
+}
+
+.msg-wrap.shown .msg {
+  transform: scale(1);
+}
+
+.msg h2 {
+  margin: 0;
+  font-size: min(calc(var(--u) * 11), calc(var(--h) * 6));
+  line-height: 1.1;
+}
+
+.msg-text {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: min(calc(var(--u) * 5.2), calc(var(--h) * 3));
+  line-height: 1.35;
+}
+
+.tut-head {
+  display: flex;
+  width: 100%;
+  justify-content: space-around;
+  font-size: min(calc(var(--u) * 6.5), calc(var(--h) * 3.6));
+}
+
+.tut-image {
+  width: 100%;
+  height: auto;
+  max-height: calc(var(--h) * 50);
+  object-fit: contain;
+  border-radius: calc(var(--u) * 2);
+}
+
+.tick-btn {
+  width: min(calc(var(--u) * 16), calc(var(--h) * 9));
+  height: min(calc(var(--u) * 16), calc(var(--h) * 9));
+}
+
+.tick-btn img {
+  width: 100%;
+  height: 100%;
+}
+
+.pill-btn {
+  padding: calc(var(--u) * 3) calc(var(--u) * 10);
+  background: var(--green);
+  border-radius: calc(var(--u) * 3);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2), 0 0 calc(var(--u) * 4) rgba(69, 179, 74, 0.45);
+  font-size: min(calc(var(--u) * 6.5), calc(var(--h) * 3.6));
+}
+
+.link-btn {
+  color: #9aa6b0;
+  font-size: min(calc(var(--u) * 4.8), calc(var(--h) * 2.7));
+}

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Space Evolution: merge stardust into asteroids, moons, planets and suns until a black hole forms in the center.">
+  <meta name="theme-color" content="#2e3a40">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Space Evolution</title>
+  <link rel="icon" type="image/png" href="img/icon-192.png">
+  <link rel="apple-touch-icon" href="img/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <div id="vignette"></div>
+
+  <div id="stage">
+    <div id="hud" class="hidden">
+      <div class="hud-bar">
+        <div class="hud-block">
+          <img id="scoreIcon" src="img/score.webp" alt="Score">
+          <span id="score" class="score-blue">0</span>
+          <img src="img/crown.webp" alt="Highscore">
+          <span id="highscore" class="score-yellow">0</span>
+        </div>
+        <div class="hud-block">
+          <img src="img/clock.webp" alt="Time">
+          <span id="time" class="score-blue">00:00</span>
+          <img id="nextIcon" src="img/asteroid.webp" alt="Next level">
+          <span id="fastest">-</span>
+        </div>
+        <button id="pauseBtn" class="pause-btn" aria-label="Menu"><img src="img/pause.webp" alt=""></button>
+      </div>
+    </div>
+
+    <div id="menu" class="hidden">
+      <div class="title-container">
+        <img class="title" src="img/logo.webp" alt="Space Evolution">
+        <div class="goal">Create a <b class="hl">BLACK HOLE!</b></div>
+      </div>
+      <div class="menu-panel">
+        <div class="level-picker">
+          <button id="prevLevel" class="arrow-btn" aria-label="Previous level">&#8249;</button>
+          <svg id="levelPreview" class="level-preview" aria-hidden="true"></svg>
+          <button id="nextLevel" class="arrow-btn" aria-label="Next level">&#8250;</button>
+        </div>
+        <div class="level-name"><span id="levelName">Classic</span><span id="levelTag" class="level-tag">Original</span></div>
+        <div class="menu-high"><img src="img/crown.webp" alt="Highscore"><span id="menuHighscore">0</span></div>
+        <div id="menuTimes" class="menu-times"></div>
+      </div>
+      <button id="playBtn" class="fade play-btn" aria-label="Play"><img class="wobble" src="img/play.webp" alt=""></button>
+      <button id="restartBtn" class="fade restart-btn" aria-label="New game"><img class="wobble" src="img/restart.webp" alt=""></button>
+      <button id="musicBtn" class="fade corner-btn music-btn" aria-label="Music"><img class="wobble" src="img/music-on.webp" alt=""></button>
+      <button id="sfxBtn" class="fade corner-btn sfx-btn" aria-label="Sound effects"><img class="wobble" src="img/sfx-on.webp" alt=""></button>
+      <button id="tutorialBtn" class="fade corner-btn tutorial-btn" aria-label="How to play"><span class="wobble">?</span></button>
+    </div>
+
+    <div id="messages"></div>
+    <div id="popups"></div>
+  </div>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="js/assets.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

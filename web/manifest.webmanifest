@@ -1,0 +1,11 @@
+{
+  "name": "Space Evolution",
+  "short_name": "Space Evo",
+  "description": "Merge stardust into planets and suns until a black hole forms in the center.",
+  "start_url": ".",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#2e3a40",
+  "theme_color": "#2e3a40",
+  "icons": [{ "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+}
