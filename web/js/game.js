@@ -116,10 +116,14 @@
       const group = this.collectGroup();
       const info = SE.info(this.obj.type);
       if (group.length >= info.amountToCombine && !this.connectedToCenter) {
+        this.session.objectCreated(info.next);
         this.combineObjects(group, info, givesScore);
         return true;
       }
-      return this.session.center.tryToCombine(givesScore);
+      const center = this.session.center;
+      if (center) return center.tryToCombine(givesScore);
+      this.session.checkGameover();
+      return false;
     }
 
     // addAllNeighboursToCombine as an iterative flood fill over same-type tiles.
@@ -492,7 +496,9 @@
       this.objects = new Set();
       this.spawnMovers = [];
       this.tiles = [];
-      this.center = null;
+      this.center = null; // stays null on free levels
+      this.highestType = SE.Type.stardust; // free levels: best object created so far
+      this.started = false;
       this.mapTime = 0;
 
       this.mapGroup = new THREE.Group();
@@ -531,13 +537,23 @@
       this.combiningTime = C.combiningTime;
       await this.selection.setup(saved ? saved.queue : null);
       if (this.dead) return;
+      this.started = true;
       this.setPlayerCanPlay(true);
     }
 
     setScoreAndTime(saved) {
       this.score.setScore(saved ? saved.score : 0);
       this.speedrun.setTime(saved ? saved.time : 0);
-      this.speedrun.levelReached(saved ? saved.levelType : SE.Type.stardust, false);
+      this.highestType = saved ? saved.levelType : SE.Type.stardust;
+      this.speedrun.levelReached(this.highestType, false);
+    }
+
+    // Free levels: speedrun splits for the first asteroid, moon, ... combined anywhere; a black hole wins.
+    objectCreated(type) {
+      if (!this.level.free || !this.started || type <= this.highestType) return;
+      this.highestType = type;
+      this.speedrun.levelReached(type, true);
+      if (type === SE.Type.blackhole) SE.UI.showMessage('youWin', 1);
     }
 
     // Map.generateMap: tiles fly out of the center one after another, sorted clockwise.
@@ -552,17 +568,21 @@
         await this.wait(this.combiningTime / 4);
         if (this.dead) return;
       }
-      const center = (this.center = new CenterTile(this));
-      center.group.scale.setScalar(0);
-      this.mapGroup.add(center.group);
-      this.tiles.push(center);
-      this.addSpawnMover(center.group, new THREE.Vector3(0, 0, 0), 1.3, this.combiningTime);
+      if (!this.level.free) {
+        const center = (this.center = new CenterTile(this));
+        center.group.scale.setScalar(0);
+        this.mapGroup.add(center.group);
+        this.tiles.push(center);
+        this.addSpawnMover(center.group, new THREE.Vector3(0, 0, 0), 1.3, this.combiningTime);
+      }
       await this.wait(this.combiningTime * 1.1);
       for (const t of this.tiles) t.findNeighbours();
     }
 
     // StartManager.getGameData for a new game: stardust everywhere except the center neighbours.
+    // Free levels start empty so the speedrun splits only depend on the player.
     newGameData() {
+      if (this.level.free) return { levelType: SE.Type.stardust, objects: [] };
       const objects = this.tiles
         .filter((t) => !t.isCenter && !this.center.neighbours.includes(t))
         .map((t) => ({ x: t.x, y: t.y, type: SE.Type.stardust }));
@@ -576,7 +596,7 @@
     // Map.spawnSpaceObjects. Combining is live here, so a new board shuffles itself into a random start.
     async spawnSpaceObjects(data) {
       const origin = new THREE.Vector3(0, 0, 0);
-      this.spawnObject(this.center, data.levelType, false, false, origin);
+      if (this.center) this.spawnObject(this.center, data.levelType, false, false, origin);
       for (const o of data.objects) {
         await this.wait(this.combiningTime / 4);
         if (this.dead) return;
@@ -619,7 +639,7 @@
       tile.obj = so;
       so.goTo(tile.group, false, 1, !useQueue);
       if (useQueue && givesScore) this.score.addForCreating(so.type, tile);
-      this.center.refreshCenterNeighbourState();
+      if (this.center) this.center.refreshCenterNeighbourState();
       return tile.tryToCombine(givesScore);
     }
 
@@ -651,16 +671,17 @@
 
     // SaveDataManager.refreshSaveData + Save
     saveGame() {
-      if (this.center) {
+      if (this.started) {
         this.score.updateHighScore(true);
         if (this.gameover) {
           this.record.currentGame = null;
         } else if (this.playerCanPlay && this.canPlace && this.selection.queue.length) {
+          const center = this.center;
           this.record.currentGame = {
             score: this.score.getTotalScore(),
             time: this.speedrun.time,
             queue: this.selection.types(),
-            levelType: this.center.obj ? this.center.obj.type : SE.Type.stardust,
+            levelType: center ? (center.obj ? center.obj.type : SE.Type.stardust) : this.highestType,
             objects: this.tiles.filter((t) => !t.isCenter && t.contains()).map((t) => ({ x: t.x, y: t.y, type: t.obj.type })),
           };
         }

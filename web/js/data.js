@@ -99,6 +99,9 @@
   }
 
   const without = (tiles, removed) => tiles.filter((t) => !removed.some((x) => same(t, x)));
+  const hexDistance = (a, b) => (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[0] + a[1] - b[0] - b[1])) / 2;
+  // Tiles of ring k touching one of its six corners (each corner plus its two ring neighbours).
+  const cornerTiles = (k) => ring(k).filter((t) => axisTiles(k).some((c) => hexDistance(t, c) <= 1));
   const toWorld = ([q, r]) => [(q * Math.sqrt(3)) / 2, r + q / 2];
 
   const TILE_HALF_HEIGHT = 0.47;
@@ -121,6 +124,8 @@
     return best;
   }
 
+  // spokes = null: a free board without center; any black hole wins and the speedrun
+  // times measure the first asteroid, moon, ... created anywhere.
   function level(id, name, tag, tiles, spokes) {
     const world = tiles.map(toWorld);
     const top = swungExtent(world, 'y', 1) + TILE_HALF_HEIGHT;
@@ -129,8 +134,9 @@
       id,
       name,
       tag,
+      free: spokes === null,
       tiles: world,
-      spokes: spokes.map(toWorld),
+      spokes: (spokes || []).map(toWorld),
       queueY,
       bounds: {
         maxX: Math.max(swungExtent(world, 'x', 1), swungExtent(world, 'x', -1)) + TILE_HALF_WIDTH + 0.06,
@@ -146,8 +152,9 @@
   SE.LEVELS = [
     level('classic', 'Classic', 'Original', without(rings23, [[0, 3], [-3, 0], [3, -3]]), triSpokes),
     level('duo', 'Duo', 'Easy', rings23, [[0, 2], [0, -2]]),
-    level('star', 'Star', 'Big', [...rings23, ...axisTiles(4)], triSpokes),
+    level('star', 'Star', 'Big', [...rings23, ...cornerTiles(4)], triSpokes),
     level('hexa', 'Hexa', 'Expert', rings23, axisTiles(2)),
+    level('free', 'Free', 'Sandbox', [...ring(0), ...ring(1), ...rings23], null),
   ];
 
   SE.levelById = (id) => SE.LEVELS.find((l) => l.id === id) || SE.LEVELS[0];

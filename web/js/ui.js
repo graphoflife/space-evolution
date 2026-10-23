@@ -151,7 +151,7 @@
       const isSpoke = (x, y) => level.spokes.some(([sx, sy]) => Math.hypot(sx - x, sy - y) < 0.1);
       let html = '';
       for (const [x, y] of level.tiles) html += `<polygon points="${hex(x, y)}" class="${isSpoke(x, y) ? 'spoke' : 'tile'}"/>`;
-      html += '<circle cx="0" cy="0" r="0.65" class="center"/>';
+      if (!level.free) html += '<circle cx="0" cy="0" r="0.65" class="center"/>';
       svg.innerHTML = html;
     },
 

@@ -33,8 +33,9 @@ Ohne Schlüssel läuft das Spiel normal, nur ohne Musik.
 |---|---|---|---|
 | Classic | 27 | 3 | Original-Layout |
 | Duo | 30 | 2 | leicht: nur zwei Nachbarn fürs Level-Up |
-| Star | 36 | 3 | großes Feld mit sechs Zacken |
+| Star | 48 | 3 | großes Feld mit sechs breiten Ecken |
 | Hexa | 30 | 6 | alle sechs Nachbarn müssen passen |
+| Free | 37 | – | Sandbox: volles rundes Feld ohne Zentrum, startet leer; ein Schwarzes Loch irgendwo gewinnt, gemessen wird die Zeit bis zum ersten Asteroiden, Mond usw. |
 
 Highscore, Bestzeiten und der laufende Spielstand werden pro Level im `localStorage` gespeichert.
 

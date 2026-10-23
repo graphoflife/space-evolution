@@ -338,6 +338,10 @@ button img {
   background: #d93a4f;
 }
 
+.level-tag[data-tag='sandbox'] {
+  background: #1d9fb3;
+}
+
 .menu-high {
   display: flex;
   align-items: center;
@@ -355,10 +359,15 @@ button img {
   line-height: 1;
 }
 
+/* Always two rows tall (up to six best times), so switching levels never shifts the menu. */
 .menu-times {
+  --time-icon: min(calc(var(--u) * 6.5), calc(var(--h) * 3.6));
   display: grid;
   grid-template-columns: repeat(3, auto);
+  grid-template-rows: repeat(2, var(--time-icon));
+  height: calc(var(--time-icon) * 2 + var(--h) * 0.6);
   justify-content: center;
+  align-content: start;
   column-gap: calc(var(--u) * 5);
   row-gap: calc(var(--h) * 0.6);
 }
@@ -372,8 +381,8 @@ button img {
 }
 
 .time-entry img {
-  width: min(calc(var(--u) * 6.5), calc(var(--h) * 3.6));
-  height: min(calc(var(--u) * 6.5), calc(var(--h) * 3.6));
+  width: var(--time-icon);
+  height: var(--time-icon);
   object-fit: contain;
 }
 
